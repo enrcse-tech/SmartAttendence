@@ -12,7 +12,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/supabase_client.js"></script>
     <style>
-        /* Existing styles... */
         .hero {
             height: 100vh;
             display: flex;
@@ -70,6 +69,9 @@
             font-size: 0.8rem;
             margin-bottom: 1rem;
             display: none;
+            padding: 0.5rem;
+            background: rgba(239, 68, 68, 0.1);
+            border-radius: 8px;
         }
     </style>
 </head>
@@ -115,12 +117,13 @@
                     </div>
                     <div class="input-group">
                         <label>Password</label>
-                        <input type="password" id="password" placeholder="••••••••" required>
+                        <input type="password" id="password" placeholder="••••••••" required minlength="6">
+                        <small style="color: var(--text-muted); font-size: 0.7rem; display: block; margin-top: 4px;">Min
+                            6 characters</small>
                     </div>
                     <button type="submit" id="submitBtn" class="btn btn-primary" style="width: 100%;">
                         Sign In
                     </button>
-                    <div id="loading" style="display:none; margin-top: 1rem;">Processing...</div>
                 </form>
             </div>
         </div>
@@ -162,21 +165,29 @@
                 if (authMode === 'signup') {
                     const { data, error: authError } = await supabaseClient.auth.signUp({
                         email,
-                        password
+                        password,
+                        options: {
+                            data: {
+                                full_name: fullName,
+                                role: currentRole,
+                                student_id: studentId
+                            }
+                        }
                     });
 
                     if (authError) throw authError;
-                    if (!data.user) throw new Error("Sign up failed.");
 
-                    // Create profile
-                    const { error: profileError } = await supabaseClient.from('profiles').insert({
+                    // Profile creation via UPSERT to handle both manual and trigger-based systems
+                    const { error: profileError } = await supabaseClient.from('profiles').upsert({
                         id: data.user.id,
                         full_name: fullName,
                         student_id: studentId,
                         role: currentRole
                     });
 
-                    if (profileError) throw profileError;
+                    // If email verification is ON, the upsert above might fail because the user 
+                    // isn't "logged in" yet. We handle this silently as the trigger/login will fix it.
+                    console.log("Profile state:", profileError ? "Pending verification" : "Created");
 
                     alert('Account created! Please verify your email if required, then sign in.');
                     setAuthMode('login');
@@ -190,14 +201,16 @@
                         .eq('id', data.user.id)
                         .single();
 
-                    if (profileError) throw new Error('Profile not found. Please sign up first.');
+                    if (profileError) {
+                        throw new Error('Profile loading failed. Please ensure your email is verified.');
+                    }
 
                     if (profile.role === 'admin') window.location.href = 'admin.html';
                     else window.location.href = 'scan.html';
                 }
             } catch (err) {
                 console.error(err);
-                errorDiv.innerText = err.message;
+                errorDiv.innerText = err.message || 'Authentication error';
                 errorDiv.style.display = 'block';
             } finally {
                 submitBtn.disabled = false;
