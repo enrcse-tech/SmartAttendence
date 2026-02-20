@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,8 +9,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
-    <script src="https://kit.fontawesome.com/your-font-awesome-kit.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase_client.js"></script>
     <style>
+        /* Existing styles... */
         .hero {
             height: 100vh;
             display: flex;
@@ -18,29 +21,35 @@
             flex-direction: column;
             text-align: center;
         }
+
         .hero h1 {
             font-size: 4rem;
             margin-bottom: 1rem;
             background: linear-gradient(to right, #818cf8, #c084fc);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+
         .hero p {
             color: var(--text-muted);
             font-size: 1.25rem;
             max-width: 600px;
             margin-bottom: 2rem;
         }
+
         .auth-card {
             width: 100%;
             max-width: 400px;
             padding: 2.5rem;
         }
+
         .tabs {
             display: flex;
             margin-bottom: 2rem;
             gap: 1rem;
         }
+
         .tab {
             flex: 1;
             padding: 0.5rem;
@@ -50,57 +59,152 @@
             color: var(--text-muted);
             transition: all 0.3s;
         }
+
         .tab.active {
             color: var(--primary);
             border-bottom-color: var(--primary);
         }
+
+        .error-msg {
+            color: var(--danger);
+            font-size: 0.8rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
     </style>
 </head>
+
 <body>
     <div class="container hero">
         <div class="animate-fade">
             <h1>SmartAttend</h1>
             <p>Revolutionizing attendance management with real-time QR tracking and smart analytics.</p>
-            
+
             <div class="glass auth-card">
                 <div class="tabs">
-                    <div class="tab active" onclick="switchRole('student')">Student</div>
-                    <div class="tab" onclick="switchRole('admin')">Admin</div>
+                    <div id="loginTab" class="tab active" onclick="setAuthMode('login')">Sign In</div>
+                    <div id="signupTab" class="tab" onclick="setAuthMode('signup')">Sign Up</div>
                 </div>
-                
-                <form id="loginForm">
+
+                <div style="margin-bottom: 1.5rem; display: flex; gap: 1rem; justify-content: center;">
+                    <label style="font-size: 0.8rem; color: var(--text-muted);">
+                        <input type="radio" name="role" value="student" checked onchange="switchRole('student')">
+                        Student
+                    </label>
+                    <label style="font-size: 0.8rem; color: var(--text-muted);">
+                        <input type="radio" name="role" value="admin" onchange="switchRole('admin')"> Admin
+                    </label>
+                </div>
+
+                <div id="error-msg" class="error-msg"></div>
+
+                <form id="authForm">
+                    <div id="signupFields" style="display: none;">
+                        <div class="input-group">
+                            <label>Full Name</label>
+                            <input type="text" id="fullname" placeholder="John Doe">
+                        </div>
+                        <div class="input-group">
+                            <label>Student/Staff ID</label>
+                            <input type="text" id="studentid" placeholder="ID-12345">
+                        </div>
+                    </div>
                     <div class="input-group">
                         <label>Email Address</label>
-                        <input type="email" placeholder="name@university.edu" required>
+                        <input type="email" id="email" placeholder="name@university.edu" required>
                     </div>
                     <div class="input-group">
                         <label>Password</label>
-                        <input type="password" placeholder="••••••••" required>
+                        <input type="password" id="password" placeholder="••••••••" required>
                     </div>
-                    <button type="submit" class="btn btn-primary" style="width: 100%;">
+                    <button type="submit" id="submitBtn" class="btn btn-primary" style="width: 100%;">
                         Sign In
                     </button>
+                    <div id="loading" style="display:none; margin-top: 1rem;">Processing...</div>
                 </form>
             </div>
         </div>
     </div>
 
     <script>
-        function switchRole(role) {
+        let authMode = 'login';
+        let currentRole = 'student';
+
+        function setAuthMode(mode) {
+            authMode = mode;
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            // Logic to change form or redirect
+            if (mode === 'login') document.getElementById('loginTab').classList.add('active');
+            else document.getElementById('signupTab').classList.add('active');
+
+            document.getElementById('signupFields').style.display = mode === 'signup' ? 'block' : 'none';
+            document.getElementById('submitBtn').innerText = mode === 'login' ? 'Sign In' : 'Create Account';
+            document.getElementById('error-msg').style.display = 'none';
         }
 
-        document.getElementById('loginForm').onsubmit = (e) => {
+        function switchRole(role) {
+            currentRole = role;
+        }
+
+        document.getElementById('authForm').onsubmit = async (e) => {
             e.preventDefault();
-            const role = document.querySelector('.tab.active').innerText.toLowerCase();
-            if (role === 'admin') {
-                window.location.href = 'admin.html';
-            } else {
-                window.location.href = 'scan.html';
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const fullName = document.getElementById('fullname').value;
+            const studentId = document.getElementById('studentid').value;
+            const errorDiv = document.getElementById('error-msg');
+            const submitBtn = document.getElementById('submitBtn');
+
+            errorDiv.style.display = 'none';
+            submitBtn.disabled = true;
+            submitBtn.innerText = 'Processing...';
+
+            try {
+                if (authMode === 'signup') {
+                    const { data, error: authError } = await supabase.auth.signUp({
+                        email,
+                        password
+                    });
+
+                    if (authError) throw authError;
+                    if (!data.user) throw new Error("Sign up failed.");
+
+                    // Create profile
+                    const { error: profileError } = await supabase.from('profiles').insert({
+                        id: data.user.id,
+                        full_name: fullName,
+                        student_id: studentId,
+                        role: currentRole
+                    });
+
+                    if (profileError) throw profileError;
+
+                    alert('Account created! Please verify your email if required, then sign in.');
+                    setAuthMode('login');
+                } else {
+                    const { data, error: loginError } = await supabase.auth.signInWithPassword({ email, password });
+                    if (loginError) throw loginError;
+
+                    const { data: profile, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('role')
+                        .eq('id', data.user.id)
+                        .single();
+
+                    if (profileError) throw new Error('Profile not found. Please sign up first.');
+
+                    if (profile.role === 'admin') window.location.href = 'admin.html';
+                    else window.location.href = 'scan.html';
+                }
+            } catch (err) {
+                console.error(err);
+                errorDiv.innerText = err.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = authMode === 'login' ? 'Sign In' : 'Create Account';
             }
         };
     </script>
 </body>
+
 </html>

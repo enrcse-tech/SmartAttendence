@@ -1,85 +1,145 @@
-// Chart Configuration
-const ctx = document.getElementById('attendanceChart').getContext('2d');
-new Chart(ctx, {
-    type: 'line',
-    data: {
-        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
-        datasets: [{
-            label: 'Attendance %',
-            data: [85, 88, 92, 94, 91, 89],
-            borderColor: '#6366f1',
-            backgroundColor: 'rgba(99, 102, 241, 0.1)',
-            fill: true,
-            tension: 0.4
-        }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: { display: false }
-        },
-        scales: {
-            y: {
-                beginAtZero: true,
-                max: 100,
-                grid: { color: 'rgba(255, 255, 255, 0.1)' },
-                ticks: { color: '#94a3b8' }
-            },
-            x: {
-                grid: { display: false },
-                ticks: { color: '#94a3b8' }
-            }
-        }
+// Initialize Supabase and check auth
+document.addEventListener('DOMContentLoaded', async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        window.location.href = 'index.html';
+        return;
     }
+
+    // Initial data fetch
+    updateDashboard();
+
+    // Subscribe to new attendance records
+    supabase
+        .channel('attendance_changes')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'attendance' }, payload => {
+            console.log('New attendance record!', payload);
+            updateDashboard();
+        })
+        .subscribe();
 });
 
-// Mock Attendance Data
-const mockData = [
-    { name: 'Alex Thompson', id: 'CS202401', course: 'Computer Science', time: '09:05 AM', status: 'present' },
-    { name: 'Sarah Miller', id: 'CS202412', course: 'Computer Science', time: '09:12 AM', status: 'present' },
-    { name: 'James Wilson', id: 'EE202405', course: 'Electrical Eng', time: '-', status: 'absent' },
-    { name: 'Emma Davis', id: 'CS202408', course: 'Computer Science', time: '09:15 AM', status: 'present' },
-    { name: 'Ryan Garcia', id: 'ME202403', course: 'Mechanical Eng', time: '09:18 AM', status: 'present' }
-];
-
-function populateTable() {
-    const tableBody = document.getElementById('attendanceTableBody');
-    tableBody.innerHTML = mockData.map(student => `
-        <tr>
-            <td>${student.name}</td>
-            <td>${student.id}</td>
-            <td>${student.course}</td>
-            <td>${student.time}</td>
-            <td><span class="status-chip status-${student.status}">${student.status.toUpperCase()}</span></td>
-        </tr>
-    `).join('');
+async function updateDashboard() {
+    await Promise.all([
+        fetchStats(),
+        fetchRecentActivity(),
+        initChart()
+    ]);
 }
 
-// QR Generation Simulation
-function generateQR() {
+async function fetchStats() {
+    try {
+        // Total Students
+        const { count: studentCount } = await supabase
+            .from('profiles')
+            .select('*', { count: 'exact', head: true })
+            .eq('role', 'student');
+
+        // Records today
+        const today = new Date().toISOString().split('T')[0];
+        const { count: todayCount } = await supabase
+            .from('attendance')
+            .select('*', { count: 'exact', head: true })
+            .gte('scanned_at', today);
+
+        // Update UI
+        document.querySelectorAll('.stat-value')[0].innerText = `${todayCount || 0}`;
+        document.querySelectorAll('.stat-label')[0].innerText = `Today's Attendance`;
+
+        document.querySelectorAll('.stat-value')[1].innerText = `${studentCount || 0}`;
+        document.querySelectorAll('.stat-label')[1].innerText = `Active Students`;
+
+        // Mock pending for now or calculate if schema supports
+    } catch (err) {
+        console.error('Error fetching stats:', err);
+    }
+}
+
+async function fetchRecentActivity() {
+    try {
+        const { data, error } = await supabase
+            .from('attendance')
+            .select(`
+                id,
+                scanned_at,
+                profiles (full_name, student_id, course)
+            `)
+            .order('scanned_at', { ascending: false })
+            .limit(10);
+
+        if (error) throw error;
+
+        const tableBody = document.getElementById('attendanceTableBody');
+        tableBody.innerHTML = data.map(record => `
+            <tr>
+                <td>${record.profiles.full_name}</td>
+                <td>${record.profiles.student_id}</td>
+                <td>${record.profiles.course}</td>
+                <td>${new Date(record.scanned_at).toLocaleTimeString()}</td>
+                <td><span class="status-chip status-present">PRESENT</span></td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        console.error('Error fetching activity:', err);
+    }
+}
+
+async function generateQR() {
     const placeholder = document.getElementById('qrPlaceholder');
     const timer = document.getElementById('timer');
+    const qr_token = 'SESSION_' + Math.random().toString(36).substr(2, 9).toUpperCase();
+    const expires_at = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-    // Simulate QR generation
-    placeholder.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=SESSION_${Date.now()}" alt="QR">`;
-    placeholder.style.background = 'white';
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('sessions').insert({
+            qr_token,
+            expires_at,
+            created_by: user.id
+        });
 
-    let seconds = 300;
+        if (error) throw error;
+
+        placeholder.innerHTML = `<img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${qr_token}" alt="QR" style="border-radius: 8px;">`;
+
+        startTimer(300, timer, placeholder);
+    } catch (err) {
+        alert('Failed to generate session: ' + err.message);
+    }
+}
+
+function startTimer(duration, display, container) {
+    let seconds = duration;
     const interval = setInterval(() => {
-        seconds--;
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
-        timer.innerText = `Expires in: ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+        display.innerText = `Expires in: ${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
-        if (seconds <= 0) {
+        if (--seconds < 0) {
             clearInterval(interval);
-            placeholder.innerHTML = '<span style="color: #000;">EXPIRED</span>';
-            timer.innerText = 'QR Code Expired. Generate a new one.';
+            container.innerHTML = '<span style="color: #000;">EXPIRED</span>';
+            display.innerText = 'QR Code Expired.';
         }
     }, 1000);
 }
 
-// Initialize components
-document.addEventListener('DOMContentLoaded', () => {
-    populateTable();
-});
+async function initChart() {
+    const ctx = document.getElementById('attendanceChart').getContext('2d');
+    // In a real app, query group by day
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+            datasets: [{
+                label: 'Attendance',
+                data: [12, 19, 3, 5, 2, 3],
+                borderColor: '#6366f1',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}

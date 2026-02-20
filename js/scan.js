@@ -1,38 +1,84 @@
-function onScanSuccess(decodedText, decodedResult) {
-    // Handle the scanned code
-    console.log(`Code matched = ${decodedText}`, decodedResult);
+let html5QrcodeScanner = null;
 
-    // Stop the scanner
-    html5QrcodeScanner.clear().then(_ => {
-        // Show success UI
-        document.querySelector('.qr-container').style.display = 'none';
-        const resultCard = document.getElementById('result-card');
-        resultCard.style.display = 'block';
+document.addEventListener('DOMContentLoaded', async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        window.location.href = 'index.html';
+        return;
+    }
+    initScanner();
+});
 
-        const timestamp = new Date().toLocaleTimeString();
-        document.getElementById('result-text').innerText =
-            `Attendance for Session ${decodedText.split('_')[1] || 'Main'} successfully recorded at ${timestamp}.`;
+function initScanner() {
+    html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader",
+        {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0
+        },
+        false
+    );
+    html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+}
 
-        // In a real app, you would send decodedText to your backend here
-        // fetch('/api/attendance', { method: 'POST', body: JSON.stringify({ token: decodedText }) });
-    }).catch(error => {
-        console.warn("Failed to clear scanner", error);
-    });
+async function onScanSuccess(decodedText) {
+    console.log(`Scan result: ${decodedText}`);
+
+    try {
+        // 1. Verify session
+        const { data: session, error: sessionError } = await supabase
+            .from('sessions')
+            .select('*')
+            .eq('qr_token', decodedText)
+            .single();
+
+        if (sessionError || !session) throw new Error("Invalid QR Code");
+
+        if (new Date(session.expires_at) < new Date()) {
+            throw new Error("QR Code has expired");
+        }
+
+        // 2. Mark attendance
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error: attendError } = await supabase
+            .from('attendance')
+            .insert({
+                session_id: session.id,
+                student_id: user.id
+            });
+
+        if (attendError) {
+            if (attendError.code === '23505') throw new Error("Attendance already marked!");
+            throw attendError;
+        }
+
+        // 3. Success UI
+        showSuccess(decodedText);
+
+    } catch (err) {
+        alert(err.message);
+        // Restart scanner after short delay if it was a minor error
+        if (err.message.includes("Expired") || err.message.includes("Invalid")) {
+            // Keep scanning
+        }
+    }
+}
+
+function showSuccess(token) {
+    if (html5QrcodeScanner) {
+        html5QrcodeScanner.clear().then(() => {
+            document.querySelector('.qr-container').style.display = 'none';
+            const resultCard = document.getElementById('result-card');
+            resultCard.style.display = 'block';
+
+            const timestamp = new Date().toLocaleTimeString();
+            document.getElementById('result-text').innerText =
+                `Attendance successfully recorded at ${timestamp}.`;
+        });
+    }
 }
 
 function onScanFailure(error) {
-    // Just silenty fail for most cases to avoid UI spam
-    // console.warn(`Code scan error = ${error}`);
+    // Suppress noise
 }
-
-let html5QrcodeScanner = new Html5QrcodeScanner(
-    "reader",
-    {
-        fps: 10,
-        qrbox: { width: 250, height: 250 },
-        aspectRatio: 1.0
-    },
-    /* verbose= */ false
-);
-
-html5QrcodeScanner.render(onScanSuccess, onScanFailure);
