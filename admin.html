@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - SmartAttend</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script defer src="js/admin.js"></script>
+</head>
+
+<body class="dashboard-grid">
+    <aside class="sidebar">
+        <h2 style="margin-bottom: 2rem; color: var(--primary);">SmartAttend</h2>
+        <nav>
+            <ul style="list-style: none;">
+                <li style="margin-bottom: 1rem;"><a href="#" class="btn btn-primary"
+                        style="justify-content: flex-start;">Dashboard</a></li>
+                <li style="margin-bottom: 1rem;"><a href="#" class="btn"
+                        style="justify-content: flex-start; color: var(--text-muted);">Attendance</a></li>
+                <li style="margin-bottom: 1rem;"><a href="#" class="btn"
+                        style="justify-content: flex-start; color: var(--text-muted);">Students</a></li>
+                <li style="margin-top: 10rem;"><a href="index.html" class="btn" style="color: var(--danger);">Logout</a>
+                </li>
+            </ul>
+        </nav>
+    </aside>
+
+    <main class="main-content">
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+            <h1>Dashboard Overview</h1>
+            <button class="btn btn-primary" onclick="generateQR()">Generate Session QR</button>
+        </header>
+
+        <div class="stats-grid">
+            <div class="glass stat-card">
+                <div class="stat-label">Daily Attendance</div>
+                <div class="stat-value">94%</div>
+                <div style="color: var(--accent); font-size: 0.8rem;">+2.4% from last week</div>
+            </div>
+            <div class="glass stat-card">
+                <div class="stat-label">Active Students</div>
+                <div class="stat-value">1,280</div>
+            </div>
+            <div class="glass stat-card">
+                <div class="stat-label">Pending Reviews</div>
+                <div class="stat-value">12</div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; margin-bottom: 2rem;">
+            <div class="glass" style="padding: 2rem;">
+                <h3>Attendance Trends</h3>
+                <canvas id="attendanceChart" style="margin-top: 1rem;"></canvas>
+            </div>
+            <div class="glass" style="padding: 2rem; text-align: center;">
+                <h3>Session QR</h3>
+                <div id="qrPlaceholder"
+                    style="margin: 1.5rem auto; width: 150px; height: 150px; background: white; border-radius: 12px; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: #000;">IDLE</span>
+                </div>
+                <p id="timer" style="color: var(--text-muted); font-size: 0.9rem;">Expires in: 05:00</p>
+            </div>
+        </div>
+
+        <div class="glass" style="padding: 2rem;">
+            <h3>Recent Activity</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>ID</th>
+                        <th>Course</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceTableBody">
+                    <!-- Dynamic content -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+</body>
+
+</html>

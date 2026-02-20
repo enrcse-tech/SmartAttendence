@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan QR - SmartAttend</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+</head>
+
+<body
+    style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; text-align: center;">
+    <div class="container">
+        <header style="margin-bottom: 2rem;">
+            <h1 style="color: var(--primary);">Scan QR</h1>
+            <p style="color: var(--text-muted);">Point your camera at the attendance QR code</p>
+        </header>
+
+        <div class="qr-container glass">
+            <div id="reader"></div>
+            <div class="scanner-overlay">
+                <div class="scanner-line"></div>
+            </div>
+        </div>
+
+        <div id="result-card" class="glass"
+            style="display: none; padding: 2rem; margin-top: 2rem; border-color: var(--accent); max-width: 400px;">
+            <div style="font-size: 3rem; color: var(--accent); margin-bottom: 1rem;">✓</div>
+            <h3>Attendance Marked!</h3>
+            <p id="result-text" style="color: var(--text-muted); margin: 1rem 0;"></p>
+            <button class="btn btn-primary" onclick="location.reload()" style="width: 100%;">Scan Again</button>
+        </div>
+
+        <a href="index.html" class="btn" style="margin-top: 2rem; color: var(--text-muted);">
+            <span style="margin-right: 0.5rem;">←</span> Back to Home
+        </a>
+    </div>
+
+    <script src="js/scan.js"></script>
+</body>
+
+</html>
