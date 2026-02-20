@@ -1,6 +1,6 @@
 // Initialize Supabase and check auth
 document.addEventListener('DOMContentLoaded', async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         window.location.href = 'index.html';
         return;
@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     updateDashboard();
 
     // Subscribe to new attendance records
-    supabase
+    supabaseClient
         .channel('attendance_changes')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'attendance' }, payload => {
             console.log('New attendance record!', payload);
@@ -30,14 +30,14 @@ async function updateDashboard() {
 async function fetchStats() {
     try {
         // Total Students
-        const { count: studentCount } = await supabase
+        const { count: studentCount } = await supabaseClient
             .from('profiles')
             .select('*', { count: 'exact', head: true })
             .eq('role', 'student');
 
         // Records today
         const today = new Date().toISOString().split('T')[0];
-        const { count: todayCount } = await supabase
+        const { count: todayCount } = await supabaseClient
             .from('attendance')
             .select('*', { count: 'exact', head: true })
             .gte('scanned_at', today);
@@ -49,7 +49,6 @@ async function fetchStats() {
         document.querySelectorAll('.stat-value')[1].innerText = `${studentCount || 0}`;
         document.querySelectorAll('.stat-label')[1].innerText = `Active Students`;
 
-        // Mock pending for now or calculate if schema supports
     } catch (err) {
         console.error('Error fetching stats:', err);
     }
@@ -57,7 +56,7 @@ async function fetchStats() {
 
 async function fetchRecentActivity() {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('attendance')
             .select(`
                 id,
@@ -72,9 +71,9 @@ async function fetchRecentActivity() {
         const tableBody = document.getElementById('attendanceTableBody');
         tableBody.innerHTML = data.map(record => `
             <tr>
-                <td>${record.profiles.full_name}</td>
-                <td>${record.profiles.student_id}</td>
-                <td>${record.profiles.course}</td>
+                <td>${record.profiles ? record.profiles.full_name : 'Unknown'}</td>
+                <td>${record.profiles ? record.profiles.student_id : '-'}</td>
+                <td>${record.profiles ? record.profiles.course : '-'}</td>
                 <td>${new Date(record.scanned_at).toLocaleTimeString()}</td>
                 <td><span class="status-chip status-present">PRESENT</span></td>
             </tr>
@@ -91,8 +90,8 @@ async function generateQR() {
     const expires_at = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
     try {
-        const { data: { user } } = await supabase.auth.getUser();
-        const { error } = await supabase.from('sessions').insert({
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        const { error } = await supabaseClient.from('sessions').insert({
             qr_token,
             expires_at,
             created_by: user.id
@@ -125,7 +124,6 @@ function startTimer(duration, display, container) {
 
 async function initChart() {
     const ctx = document.getElementById('attendanceChart').getContext('2d');
-    // In a real app, query group by day
     new Chart(ctx, {
         type: 'line',
         data: {

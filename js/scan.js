@@ -1,7 +1,7 @@
 let html5QrcodeScanner = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseClient.auth.getUser();
     if (!user) {
         window.location.href = 'index.html';
         return;
@@ -27,7 +27,7 @@ async function onScanSuccess(decodedText) {
 
     try {
         // 1. Verify session
-        const { data: session, error: sessionError } = await supabase
+        const { data: session, error: sessionError } = await supabaseClient
             .from('sessions')
             .select('*')
             .eq('qr_token', decodedText)
@@ -40,8 +40,8 @@ async function onScanSuccess(decodedText) {
         }
 
         // 2. Mark attendance
-        const { data: { user } } = await supabase.auth.getUser();
-        const { error: attendError } = await supabase
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        const { error: attendError } = await supabaseClient
             .from('attendance')
             .insert({
                 session_id: session.id,
@@ -58,10 +58,6 @@ async function onScanSuccess(decodedText) {
 
     } catch (err) {
         alert(err.message);
-        // Restart scanner after short delay if it was a minor error
-        if (err.message.includes("Expired") || err.message.includes("Invalid")) {
-            // Keep scanning
-        }
     }
 }
 
